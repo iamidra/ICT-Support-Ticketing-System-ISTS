@@ -226,15 +226,3 @@ Found a vulnerability? Please report it privately to the maintainer instead of o
 | Need a second admin | Add a supervisor-role officer from **Manage Officers** |
 
 ---
-
-## Contributing
-
-1. Fork the repository and create a branch: `git checkout -b feature/short-description`
-2. Make focused commits using [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`)
-3. Open a pull request describing what changed and how you tested it
-
----
-
-## License
-
-Released under the [MIT License](LICENSE).
