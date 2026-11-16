@@ -1,0 +1,46 @@
+# ISTS - Production Apache Server Configuration
+# ==============================================================================
+
+# Disable directory file listings
+Options -Indexes
+
+# Ensure UTF-8 encoding
+AddDefaultCharset UTF-8
+
+# Prevent access to hidden files and sensitive configuration
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Block direct access to environment, documentation, and database files
+<FilesMatch "(^#.*#|\.(bak|conf|dist|fla|in[ci]|log|psd|sh|sql|sw[op]|env.*|env|md|git.*))$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Protect includes and config directories from direct URL execution
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Prevent direct access to config and includes directories
+    RewriteRule ^config/ - [F,L,NC]
+    RewriteRule ^includes/ - [F,L,NC]
+    RewriteRule ^sql/ - [F,L,NC]
+
+    # Block script execution in assets and uploads
+    RewriteRule ^assets/.*\.(php|phtml|php3|php4|php5|phps)$ - [F,L,NC]
+    RewriteRule ^uploads/.*\.(php|phtml|php3|php4|php5|phps)$ - [F,L,NC]
+</IfModule>
+
+# Security Headers (if mod_headers is enabled)
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Custom Error Pages
+ErrorDocument 404 /ists/404.php
+ErrorDocument 403 /ists/404.php

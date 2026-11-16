@@ -1,0 +1,33 @@
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# User uploads (keep the folder and its .htaccess)
+uploads/*
+!uploads/.gitkeep
+!uploads/.htaccess
+
+# Local diagnostics / debugging
+diag_check.php
+*.log
+error_log
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+
+# Dependencies & build output (if you add Composer/npm later)
+/vendor/
+/node_modules/
+
+# Backups & archives
+*.bak
+*.zip
+*.sql.gz
