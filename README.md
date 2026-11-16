@@ -1,9 +1,7 @@
 # ICT Support Ticketing Solution (ISTS)
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
 ![PHP](https://img.shields.io/badge/PHP-8.0%2B-777BB4?logo=php&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-5.7%2B%20%7C%20MariaDB-4479A1?logo=mysql&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-green)
 
 A web-based IT help desk and incident ticketing system. Staff submit support requests without logging in, ICT supervisors assign them to technicians, and technicians record resolutions that requesters can follow in real time.
 
@@ -101,7 +99,7 @@ Built with plain PHP (PDO / MySQL), a custom CSS design system and inline SVG ic
 1. **Clone the repository** into your web root:
    ```bash
    cd C:\xampp\htdocs
-   git clone https://github.com/<your-username>/ists.git
+   git clone https://github.com/iamidra/ICT-Support-Ticketing-System-ISTS
    ```
 2. **Start** Apache and MySQL from the XAMPP Control Panel.
 3. **Create the database.** In phpMyAdmin create a database named `ists_db` (collation `utf8mb4_general_ci`), then import `sql/schema.sql`.
