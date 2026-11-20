@@ -40,6 +40,8 @@ try {
     $update = $pdo->prepare("UPDATE ict_officers SET password = ? WHERE officer_id = ?");
     $update->execute([$hash, $officerId]);
 
+    log_audit_event('officer.password_reset', 'security', 'Supervisor reset password for staff member ' . $officer['full_name'] . ' (ID: ' . $officerId . ')', 'officer', $officerId);
+
     set_flash('success', 'Password reset successfully for ' . $officer['full_name'] . '.');
     header('Location: ' . url('supervisor/manage_officers.php'));
     exit;

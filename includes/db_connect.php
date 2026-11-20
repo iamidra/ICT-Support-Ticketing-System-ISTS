@@ -10,10 +10,13 @@ try {
         PDO::ATTR_EMULATE_PREPARES   => false,
     ]);
 
-    // Auto-migrate schema: ensure columns added in updates exist without requiring manual DB import
-    static $schemaSynced = false;
-    if (!$schemaSynced) {
-        $schemaSynced = true;
+    // High-performance schema sync: gated by persistent cache marker so zero DDL queries run on normal page loads
+    $cacheDir = __DIR__ . '/../sys_cache';
+    $cacheFile = $cacheDir . '/.schema_synced';
+    if (!file_exists($cacheFile)) {
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
         try {
             $officerCols = $pdo->query("SHOW COLUMNS FROM ict_officers")->fetchAll(PDO::FETCH_COLUMN);
             if (!empty($officerCols)) {
@@ -30,7 +33,29 @@ try {
                 if (!in_array('email', $ticketCols, true)) {
                     $pdo->exec("ALTER TABLE tickets ADD COLUMN email VARCHAR(150) DEFAULT NULL AFTER full_name");
                 }
+                if (!in_array('due_date', $ticketCols, true)) {
+                    $pdo->exec("ALTER TABLE tickets ADD COLUMN due_date DATETIME DEFAULT NULL AFTER priority");
+                }
+                if (!in_array('feedback_rating', $ticketCols, true)) {
+                    $pdo->exec("ALTER TABLE tickets ADD COLUMN feedback_rating TINYINT DEFAULT NULL AFTER updated_at");
+                }
+                if (!in_array('feedback_comments', $ticketCols, true)) {
+                    $pdo->exec("ALTER TABLE tickets ADD COLUMN feedback_comments TEXT DEFAULT NULL AFTER feedback_rating");
+                }
+                if (!in_array('resolved_at', $ticketCols, true)) {
+                    $pdo->exec("ALTER TABLE tickets ADD COLUMN resolved_at DATETIME DEFAULT NULL AFTER feedback_comments");
+                }
+                if (!in_array('closed_at', $ticketCols, true)) {
+                    $pdo->exec("ALTER TABLE tickets ADD COLUMN closed_at DATETIME DEFAULT NULL AFTER resolved_at");
+                }
             }
+
+            $resCols = $pdo->query("SHOW COLUMNS FROM resolutions")->fetchAll(PDO::FETCH_COLUMN);
+            if (!empty($resCols) && !in_array('is_internal', $resCols, true)) {
+                $pdo->exec("ALTER TABLE resolutions ADD COLUMN is_internal TINYINT(1) NOT NULL DEFAULT 0 AFTER resolution_text");
+            }
+
+            @file_put_contents($cacheFile, date('Y-m-d H:i:s'));
         } catch (Throwable $se) {
             // Silently continue if DDL is restricted; queries have code-level fallbacks
             error_log("Schema auto-sync notice: " . $se->getMessage());

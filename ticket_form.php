@@ -41,7 +41,7 @@ include __DIR__ . '/includes/header.php';
       </div>
     </div>
 
-    <form action="<?= url('submit_ticket.php') ?>" method="POST" id="ticketSubmitForm">
+    <form action="<?= url('submit_ticket.php') ?>" method="POST" id="ticketSubmitForm" enctype="multipart/form-data">
       <?= csrf_field() ?>
 
       <div class="form-row">
@@ -120,6 +120,11 @@ include __DIR__ . '/includes/header.php';
         <div class="form-text">Include specific details (equipment tags, error numbers, symptoms) so our ICT technicians can assist promptly.</div>
       </div>
 
+      <div class="form-group">
+        <label for="attachment"><?= icon('paperclip', '', 15) ?> Attach File / Screenshot <span style="font-size: 0.8rem; font-weight: normal; color: var(--color-text-muted);">(Optional &bull; Images, documents, or logs up to 10MB)</span></label>
+        <input type="file" id="attachment" name="attachment" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.log">
+      </div>
+
       <div style="margin-top: 2rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
         <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2rem;">
           <?= icon('check_circle', '', 18) ?> Submit Support Ticket
@@ -146,7 +151,7 @@ include __DIR__ . '/includes/header.php';
         </li>
         <li style="margin-bottom: 0.75rem; display: flex; align-items: flex-start; gap: 0.5rem;">
           <span style="color: var(--color-primary);"><?= icon('check', '', 16) ?></span>
-          <span><strong>Keep your Ticket Code:</strong> You will receive a code (e.g. ISTS-000123) to track status anytime.</span>
+          <span><strong>Keep your Ticket Code:</strong> You will receive a secure tracking code (e.g. ISTS-8X7D-2041) to track status anytime.</span>
         </li>
       </ul>
     </div>

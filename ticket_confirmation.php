@@ -4,6 +4,8 @@ require_once __DIR__ . '/includes/db_connect.php';
 
 $ticketCode = trim($_GET['ticket_id'] ?? '');
 
+$trackUrl = url('track_status.php?ticket_id=' . urlencode($ticketCode));
+
 include __DIR__ . '/includes/header.php';
 ?>
 
@@ -14,10 +16,10 @@ include __DIR__ . '/includes/header.php';
     </div>
     
     <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--color-dark); margin-bottom: 0.5rem;">Ticket Logged Successfully!</h1>
-    <p style="color: var(--color-text-muted); line-height: 1.6; max-width: 500px; margin: 0 auto;">Your ICT support request has been registered in our queue. Please save your unique Ticket ID below to track resolution progress.</p>
+    <p style="color: var(--color-text-muted); line-height: 1.6; max-width: 500px; margin: 0 auto;">Your ICT support request has been registered in our queue. Please save your unique Ticket Code below to track resolution progress.</p>
 
     <div style="margin: 1.75rem 0;">
-      <span style="font-size: 0.8rem; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.35rem;">Your Unique Ticket Code</span>
+      <span style="font-size: 0.8rem; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.35rem;">Your Secure Ticket Code</span>
       <div id="ticketCode" class="ticket-code-display"><?= e($ticketCode ?: 'N/A') ?></div>
     </div>
 
@@ -27,7 +29,7 @@ include __DIR__ . '/includes/header.php';
         Copy Code
       </button>
 
-      <a href="<?= url('track_status.php?ticket_id=' . urlencode($ticketCode)) ?>" class="btn btn-primary">
+      <a href="<?= $trackUrl ?>" class="btn btn-primary">
         <?= icon('search', '', 16) ?>
         Track Ticket Status &rarr;
       </a>

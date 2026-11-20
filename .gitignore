@@ -12,6 +12,7 @@ uploads/*
 diag_check.php
 *.log
 error_log
+sys_cache/
 
 # OS files
 .DS_Store

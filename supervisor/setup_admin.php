@@ -14,6 +14,12 @@ try {
     $alreadyExists = false;
 }
 
+if ($alreadyExists) {
+    set_flash('info', 'Initial setup is locked because a supervisor administrator already exists.');
+    header('Location: ' . url('login.php'));
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($alreadyExists) {
         set_flash('danger', 'Initial setup is locked because a supervisor administrator already exists.');

@@ -51,6 +51,8 @@ try {
     $delete = $pdo->prepare("DELETE FROM ict_officers WHERE officer_id = ?");
     $delete->execute([$officerId]);
 
+    log_audit_event('officer.deleted', 'officer', 'Permanently deleted staff account for ' . $officer['full_name'] . ' (role: ' . $officer['role'] . ', ID: ' . $officerId . ')', 'officer', $officerId);
+
     set_flash('success', 'Account for "' . e($officer['full_name']) . '" has been permanently deleted. Associated ticket assignments were cleared.');
     header('Location: ' . url('supervisor/manage_officers.php'));
     exit;

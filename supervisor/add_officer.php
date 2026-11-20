@@ -53,6 +53,9 @@ try {
         "INSERT INTO ict_officers (full_name, email, password, role, department, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', NOW())"
     );
     $stmt->execute([$fullName, $email, $hash, $role, $department]);
+    $newOfficerId = (int)$pdo->lastInsertId();
+
+    log_audit_event('officer.created', 'officer', 'Created new staff account for ' . $fullName . ' (' . $email . ', role: ' . $role . ', dept: ' . $department . ')', 'officer', $newOfficerId);
 
     set_flash('success', 'New account created successfully for ' . $fullName . '.');
     header('Location: ' . url('supervisor/manage_officers.php'));

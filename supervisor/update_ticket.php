@@ -26,6 +26,19 @@ if (!$ticketId) {
 }
 
 try {
+    // Fetch ticket details
+    $tStmt = $pdo->prepare("SELECT * FROM tickets WHERE ticket_id = ?");
+    $tStmt->execute([$ticketId]);
+    $ticket = $tStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$ticket) {
+        set_flash('danger', 'Ticket not found.');
+        header('Location: ' . url('supervisor/dashboard.php'));
+        exit;
+    }
+
+    $supervisorName = $_SESSION['officer_name'] ?? 'Supervisor';
+
     if ($action === 'update_status_priority') {
         $status   = trim($_POST['status'] ?? '');
         $priority = strtolower(trim($_POST['priority'] ?? ''));
@@ -39,8 +52,42 @@ try {
             exit;
         }
 
-        $stmt = $pdo->prepare("UPDATE tickets SET status = ?, priority = ? WHERE ticket_id = ?");
-        $stmt->execute([$status, $priority, $ticketId]);
+        $pdo->beginTransaction();
+
+        // Calculate new SLA due date if priority changed
+        $newDueDate = $ticket['due_date'];
+        if ($priority !== strtolower($ticket['priority'] ?? '')) {
+            $newDueDate = calculate_due_date($priority, $ticket['created_at']);
+        }
+
+        // Set resolved_at / closed_at timestamps if applicable
+        $resolvedAt = $ticket['resolved_at'];
+        $closedAt   = $ticket['closed_at'];
+        if ($status === 'Resolved' && empty($resolvedAt)) {
+            $resolvedAt = date('Y-m-d H:i:s');
+        }
+        if ($status === 'Closed' && empty($closedAt)) {
+            $closedAt = date('Y-m-d H:i:s');
+        }
+
+        $stmt = $pdo->prepare(
+            "UPDATE tickets 
+             SET status = ?, priority = ?, due_date = ?, resolved_at = ?, closed_at = ?
+             WHERE ticket_id = ?"
+        );
+        $stmt->execute([$status, $priority, $newDueDate, $resolvedAt, $closedAt, $ticketId]);
+
+        // Log changes
+        $changeDetails = "Status: {$ticket['status']} -> {$status}; Priority: " . ucfirst($ticket['priority']) . " -> " . ucfirst($priority);
+        log_ticket_activity($ticketId, $supervisorName, 'supervisor', 'status_changed', $changeDetails);
+
+        $pdo->commit();
+
+        // If newly resolved, notify requester
+        if ($status === 'Resolved' && $ticket['status'] !== 'Resolved') {
+            require_once __DIR__ . '/../includes/mailer.php';
+            notify_ticket_resolved($ticket, 'Status updated to Resolved by Supervisor.');
+        }
 
         set_flash('success', 'Ticket status updated to "' . $status . '" and priority set to "' . ucfirst($priority) . '".');
         header('Location: ' . url('supervisor/ticket_detail.php?id=' . $ticketId));
@@ -49,6 +96,7 @@ try {
     } elseif ($action === 'add_note') {
         $note = trim($_POST['admin_note'] ?? '');
         $newStatus = trim($_POST['ticket_status'] ?? '');
+        $isInternal = !empty($_POST['is_internal']) ? 1 : 0;
 
         if (empty($note)) {
             set_flash('warning', 'Administrative note cannot be empty.');
@@ -59,19 +107,44 @@ try {
         $pdo->beginTransaction();
 
         // Insert into resolutions table under the supervisor's officer_id
+        $notePrefix = $isInternal ? '[Supervisor Directive] ' : '[Supervisor Note] ';
         $stmt = $pdo->prepare(
-            "INSERT INTO resolutions (ticket_id, officer_id, resolution_text, created_at) VALUES (?, ?, ?, NOW())"
+            "INSERT INTO resolutions (ticket_id, officer_id, resolution_text, is_internal, created_at) VALUES (?, ?, ?, ?, NOW())"
         );
-        $stmt->execute([$ticketId, $_SESSION['officer_id'], '[Supervisor Note] ' . $note]);
+        $stmt->execute([$ticketId, $_SESSION['officer_id'], $notePrefix . $note, $isInternal]);
+        $resId = (int)$pdo->lastInsertId();
+
+        // Handle optional note attachment
+        if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $uploadRes = save_ticket_attachment($_FILES['attachment'], $ticketId, 'supervisor', $_SESSION['officer_id'], $resId);
+            if (!$uploadRes['success']) {
+                $pdo->rollBack();
+                set_flash('danger', 'Attachment error: ' . $uploadRes['error']);
+                header('Location: ' . url('supervisor/ticket_detail.php?id=' . $ticketId));
+                exit;
+            }
+        }
 
         if (!empty($newStatus) && in_array($newStatus, ['Pending', 'In Progress', 'Resolved', 'Closed'], true)) {
-            $update = $pdo->prepare("UPDATE tickets SET status = ? WHERE ticket_id = ?");
-            $update->execute([$newStatus, $ticketId]);
+            $resolvedAt = ($newStatus === 'Resolved') ? date('Y-m-d H:i:s') : $ticket['resolved_at'];
+            $closedAt   = ($newStatus === 'Closed') ? date('Y-m-d H:i:s') : $ticket['closed_at'];
+
+            $update = $pdo->prepare("UPDATE tickets SET status = ?, resolved_at = ?, closed_at = ? WHERE ticket_id = ?");
+            $update->execute([$newStatus, $resolvedAt, $closedAt, $ticketId]);
         }
+
+        $logAction = $isInternal ? 'internal_note' : 'note_added';
+        log_ticket_activity($ticketId, $supervisorName, 'supervisor', $logAction, ($isInternal ? '[Internal Directive] ' : '') . $note);
 
         $pdo->commit();
 
-        set_flash('success', 'Supervisor note recorded successfully.');
+        if (!$isInternal && $newStatus === 'Resolved') {
+            require_once __DIR__ . '/../includes/mailer.php';
+            notify_ticket_resolved($ticket, $note);
+        }
+
+        $noteTypeStr = $isInternal ? 'Internal supervisor directive' : 'Supervisor note';
+        set_flash('success', $noteTypeStr . ' recorded successfully.');
         header('Location: ' . url('supervisor/ticket_detail.php?id=' . $ticketId));
         exit;
     }

@@ -38,6 +38,8 @@ try {
     $delete = $pdo->prepare("DELETE FROM tickets WHERE ticket_id = ?");
     $delete->execute([$ticketId]);
 
+    log_audit_event('ticket.deleted', 'ticket', 'Permanently deleted ticket ' . $ticket['ticket_code'], 'ticket', (string)$ticketId);
+
     set_flash('success', 'Ticket ' . $ticket['ticket_code'] . ' has been permanently deleted.');
     header('Location: ' . url('supervisor/dashboard.php'));
     exit;

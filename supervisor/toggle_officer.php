@@ -49,6 +49,7 @@ try {
     $update->execute([$newStatus, $officerId]);
 
     $label = ($newStatus === 'active') ? 'activated' : 'deactivated';
+    log_audit_event('officer.status_toggled', 'officer', 'Changed account status for ' . $officer['full_name'] . ' from ' . $currentStatus . ' to ' . $newStatus, 'officer', $officerId);
     set_flash('success', 'Account for "' . $officer['full_name'] . '" has been ' . $label . '.');
     header('Location: ' . url('supervisor/manage_officers.php'));
     exit;

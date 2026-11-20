@@ -53,6 +53,13 @@ try {
     $update = $pdo->prepare("UPDATE ict_officers SET password = ? WHERE officer_id = ?");
     $update->execute([$hash, $_SESSION['officer_id']]);
 
+    log_audit_event('officer.password_changed', 'security', 'Supervisor self-changed account password', 'officer', $_SESSION['officer_id']);
+
+    // Regenerate session ID & refresh CSRF token on sensitive credential change
+    session_regenerate_id(true);
+    unset($_SESSION['csrf_token']);
+    generate_csrf_token();
+
     set_flash('success', 'Your supervisor password has been updated successfully!');
     header('Location: ' . url('supervisor/dashboard.php'));
     exit;

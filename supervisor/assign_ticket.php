@@ -29,18 +29,22 @@ try {
     $pdo->beginTransaction();
 
     // Verify officer exists and is an active officer role
-    $officerCheck = $pdo->prepare("SELECT officer_id FROM ict_officers WHERE officer_id = ? AND role = 'officer'");
+    $officerCheck = $pdo->prepare("SELECT officer_id, full_name, email FROM ict_officers WHERE officer_id = ? AND role = 'officer'");
     $officerCheck->execute([$officerId]);
-    if (!$officerCheck->fetch()) {
+    $officer = $officerCheck->fetch(PDO::FETCH_ASSOC);
+    if (!$officer) {
+        $pdo->rollBack();
         set_flash('danger', 'Selected officer account is invalid or not found.');
         header('Location: ' . url('supervisor/dashboard.php'));
         exit;
     }
 
     // Verify ticket exists
-    $ticketCheck = $pdo->prepare("SELECT ticket_id FROM tickets WHERE ticket_id = ?");
+    $ticketCheck = $pdo->prepare("SELECT * FROM tickets WHERE ticket_id = ?");
     $ticketCheck->execute([$ticketId]);
-    if (!$ticketCheck->fetch()) {
+    $ticket = $ticketCheck->fetch(PDO::FETCH_ASSOC);
+    if (!$ticket) {
+        $pdo->rollBack();
         set_flash('danger', 'Ticket not found.');
         header('Location: ' . url('supervisor/dashboard.php'));
         exit;
@@ -54,9 +58,23 @@ try {
     $statusStmt = $pdo->prepare("UPDATE tickets SET status = 'In Progress' WHERE ticket_id = ? AND status = 'Pending'");
     $statusStmt->execute([$ticketId]);
 
+    // Log assignment to audit history
+    $supervisorName = $_SESSION['officer_name'] ?? 'Supervisor';
+    log_ticket_activity(
+        $ticketId,
+        $supervisorName,
+        'supervisor',
+        'assigned',
+        'Assigned ticket to technician ' . $officer['full_name']
+    );
+
     $pdo->commit();
 
-    set_flash('success', 'Ticket successfully assigned to officer.');
+    // Notify assigned officer
+    require_once __DIR__ . '/../includes/mailer.php';
+    notify_ticket_assigned($ticket, $officer);
+
+    set_flash('success', 'Ticket successfully assigned to ' . $officer['full_name'] . '.');
     header('Location: ' . url('supervisor/dashboard.php'));
     exit;
 

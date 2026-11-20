@@ -7,9 +7,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// 1. Rate Limiting Check
-$rateLimit = check_rate_limit('login');
+$email    = strtolower(trim($_POST['email'] ?? ''));
+$password = (string)($_POST['password'] ?? '');
+
+// Hard-cap input lengths to prevent DoS via oversized strings
+$email    = substr($email, 0, 254);
+$password = substr($password, 0, 1024);
+
+// 1. Rate Limiting Check (by IP and targeted Account)
+$rateLimit = check_rate_limit('login', $email);
 if (!$rateLimit['allowed']) {
+    log_audit_event('auth.account_locked', 'security', 'Login attempt blocked by rate limit lockout for: ' . $email, 'officer', $email, null, 'Anonymous', 'public');
     set_flash('danger', 'Account sign-in is temporarily locked due to excessive failed attempts. Please retry in ' . (int)$rateLimit['remaining_minutes'] . ' minute(s).');
     header('Location: ' . url('login.php'));
     exit;
@@ -22,13 +30,6 @@ if (!verify_csrf_token($csrfToken)) {
     header('Location: ' . url('login.php'));
     exit;
 }
-
-$email    = strtolower(trim($_POST['email'] ?? ''));
-$password = (string)($_POST['password'] ?? '');
-
-// Hard-cap input lengths to prevent DoS via oversized strings
-$email    = substr($email, 0, 254);
-$password = substr($password, 0, 1024);
 
 if (empty($email) || empty($password)) {
     set_flash('danger', 'Please provide both your registered email address and password.');
@@ -45,16 +46,19 @@ try {
     if ($user && password_verify($password, $user['password'])) {
         // Check if account has been deactivated
         if (isset($user['status']) && $user['status'] === 'inactive') {
+            log_audit_event('auth.deactivated_attempt', 'security', 'Deactivated account attempted sign-in: ' . $email, 'officer', (string)$user['officer_id'], (int)$user['officer_id'], $user['full_name'], $user['role']);
             set_flash('danger', 'Your account has been deactivated. Please contact your ICT Supervisor.');
             header('Location: ' . url('login.php'));
             exit;
         }
 
-        // Authentication Successful: Reset rate limit
-        clear_rate_limit('login');
+        // Authentication Successful: Reset rate limit for both IP and user
+        clear_rate_limit('login', $email);
 
-        // Regenerate session ID to prevent Session Fixation
+        // Regenerate session ID and CSRF token to prevent Session Fixation & pre-session token reuse
         session_regenerate_id(true);
+        unset($_SESSION['csrf_token']);
+        generate_csrf_token();
 
         // Set Session Authentication Context
         $_SESSION['officer_id']    = (int)$user['officer_id'];
@@ -62,6 +66,9 @@ try {
         $_SESSION['officer_email'] = $user['email'];
         $_SESSION['officer_role']  = $user['role']; // 'officer' or 'supervisor'
         $_SESSION['last_activity'] = time();
+
+        // Record successful sign-in in system audit log
+        log_audit_event('auth.login_success', 'auth', 'Signed in successfully as ' . ucfirst($user['role']), 'officer', (string)$user['officer_id'], (int)$user['officer_id'], $user['full_name'], $user['role']);
 
         // Update last login timestamp in background
         try {
@@ -85,8 +92,9 @@ try {
         }
     }
 
-    // Failed login attempt
-    record_failed_attempt('login');
+    // Failed login attempt: Record against IP and specific targeted email
+    record_failed_attempt('login', $email);
+    log_audit_event('auth.login_failed', 'auth', 'Failed sign-in attempt for email: ' . $email, 'officer', $email, null, 'Anonymous', 'public');
     set_flash('danger', 'Invalid email address or password. Please check your credentials.');
     header('Location: ' . url('login.php'));
     exit;

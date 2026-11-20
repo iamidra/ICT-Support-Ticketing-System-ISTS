@@ -16,9 +16,10 @@ if (!verify_csrf_token($csrfToken)) {
     exit;
 }
 
-$ticketId = (int)($_POST['ticket_id'] ?? 0);
-$text     = trim($_POST['resolution_text'] ?? '');
+$ticketId     = (int)($_POST['ticket_id'] ?? 0);
+$text         = trim($_POST['resolution_text'] ?? '');
 $targetStatus = trim($_POST['target_status'] ?? 'Resolved');
+$isInternal   = !empty($_POST['is_internal']) ? 1 : 0;
 
 if (!$ticketId || empty($text)) {
     set_flash('warning', 'Resolution description cannot be empty.');
@@ -34,7 +35,7 @@ try {
     $pdo->beginTransaction();
 
     // Verify assignment ACL
-    $check = $pdo->prepare("SELECT ticket_id, status FROM tickets WHERE ticket_id = ? AND assigned_officer_id = ?");
+    $check = $pdo->prepare("SELECT * FROM tickets WHERE ticket_id = ? AND assigned_officer_id = ?");
     $check->execute([$ticketId, $_SESSION['officer_id']]);
     $existing = $check->fetch(PDO::FETCH_ASSOC);
 
@@ -47,19 +48,49 @@ try {
 
     // Insert resolution log
     $stmt = $pdo->prepare(
-        "INSERT INTO resolutions (ticket_id, officer_id, resolution_text, created_at) VALUES (?, ?, ?, NOW())"
+        "INSERT INTO resolutions (ticket_id, officer_id, resolution_text, is_internal, created_at) VALUES (?, ?, ?, ?, NOW())"
     );
-    $stmt->execute([$ticketId, $_SESSION['officer_id'], $text]);
+    $stmt->execute([$ticketId, $_SESSION['officer_id'], $text, $isInternal]);
+    $resId = (int)$pdo->lastInsertId();
+
+    // Handle optional resolution attachment
+    if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] !== UPLOAD_ERR_NO_FILE) {
+        $uploadRes = save_ticket_attachment($_FILES['attachment'], $ticketId, 'officer', $_SESSION['officer_id'], $resId);
+        if (!$uploadRes['success']) {
+            $pdo->rollBack();
+            set_flash('danger', 'Attachment error: ' . $uploadRes['error']);
+            header('Location: ' . url('officer/ticket_detail.php?id=' . $ticketId));
+            exit;
+        }
+    }
 
     // Update ticket status if not already closed
     if ($existing['status'] !== 'Closed') {
-        $statusUpdate = $pdo->prepare("UPDATE tickets SET status = ? WHERE ticket_id = ?");
-        $statusUpdate->execute([$targetStatus, $ticketId]);
+        if ($targetStatus === 'Resolved') {
+            $statusUpdate = $pdo->prepare("UPDATE tickets SET status = ?, resolved_at = NOW() WHERE ticket_id = ?");
+            $statusUpdate->execute([$targetStatus, $ticketId]);
+        } else {
+            $statusUpdate = $pdo->prepare("UPDATE tickets SET status = ? WHERE ticket_id = ?");
+            $statusUpdate->execute([$targetStatus, $ticketId]);
+        }
     }
+
+    // Log action to ticket history
+    $officerName = $_SESSION['officer_name'] ?? 'Officer';
+    $actionType = $isInternal ? 'internal_note' : ($targetStatus === 'Resolved' ? 'resolved' : 'note_added');
+    $details = ($isInternal ? '[Internal Note] ' : '') . 'Logged note; set status to ' . $targetStatus;
+    log_ticket_activity($ticketId, $officerName, 'officer', $actionType, $details);
 
     $pdo->commit();
 
-    set_flash('success', 'Resolution note saved successfully and ticket status set to "' . $targetStatus . '".');
+    // Notify requester if this is a public resolution
+    if (!$isInternal && $targetStatus === 'Resolved') {
+        require_once __DIR__ . '/../includes/mailer.php';
+        notify_ticket_resolved($existing, $text);
+    }
+
+    $noteLabel = $isInternal ? 'Internal staff note' : 'Resolution note';
+    set_flash('success', $noteLabel . ' saved successfully and ticket status set to "' . $targetStatus . '".');
     header('Location: ' . url('officer/ticket_detail.php?id=' . $ticketId));
     exit;
 

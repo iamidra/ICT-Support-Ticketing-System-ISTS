@@ -34,7 +34,7 @@ Built with plain PHP (PDO / MySQL), a custom CSS design system and inline SVG ic
 
 **Public users (no login)**
 - Submit a ticket with department, contact details, category and priority (Low, Medium, High)
-- Receive a unique ticket code (e.g. `ISTS-000002`) with copy and print options
+- Receive a unique unguessable ticket code (e.g. `ISTS-8X7D-2041`) with copy and print options
 - Track progress on a 4-stage timeline: Submitted, Assigned, In Progress, Resolved
 - Read technician resolution notes
 

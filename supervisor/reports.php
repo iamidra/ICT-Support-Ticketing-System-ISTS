@@ -30,6 +30,33 @@ $statusTotals = array_map(function($s) { return (int)$s['total']; }, $byStatus);
 $catLabels = array_column($byCategory, 'category');
 $catTotals = array_map(function($c) { return (int)$c['total']; }, $byCategory);
 
+// CSAT and SLA statistics
+try {
+    $csatStats = $pdo->query(
+        "SELECT COUNT(feedback_rating) AS total_rated, AVG(feedback_rating) AS avg_rating
+         FROM tickets WHERE feedback_rating IS NOT NULL"
+    )->fetch(PDO::FETCH_ASSOC);
+    $avgRating = $csatStats['avg_rating'] ? round((float)$csatStats['avg_rating'], 1) : 0;
+    $totalRated = (int)($csatStats['total_rated'] ?? 0);
+
+    $slaStats = $pdo->query(
+        "SELECT 
+            SUM(CASE WHEN due_date IS NOT NULL AND status IN ('Resolved', 'Closed') AND (resolved_at <= due_date OR (resolved_at IS NULL AND updated_at <= due_date)) THEN 1 ELSE 0 END) AS met_sla,
+            SUM(CASE WHEN due_date IS NOT NULL AND ((status IN ('Resolved', 'Closed') AND resolved_at > due_date) OR (status NOT IN ('Resolved', 'Closed') AND NOW() > due_date)) THEN 1 ELSE 0 END) AS breached_sla
+         FROM tickets WHERE due_date IS NOT NULL"
+    )->fetch(PDO::FETCH_ASSOC);
+    $metSla = (int)($slaStats['met_sla'] ?? 0);
+    $breachedSla = (int)($slaStats['breached_sla'] ?? 0);
+    $totalTrackedSla = $metSla + $breachedSla;
+    $slaCompliancePct = $totalTrackedSla > 0 ? round(($metSla / $totalTrackedSla) * 100) : 100;
+} catch (Throwable $e) {
+    $avgRating = 0;
+    $totalRated = 0;
+    $metSla = 0;
+    $breachedSla = 0;
+    $slaCompliancePct = 100;
+}
+
 $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 
 include __DIR__ . '/../includes/header.php';
@@ -50,6 +77,41 @@ include __DIR__ . '/../includes/supervisor_nav.php';
         <?= icon('document', '', 16) ?>
         Export Full CSV Report
       </a>
+    </div>
+  </div>
+
+  <!-- Key Metrics Summary Row: CSAT & SLA -->
+  <div class="stats-grid" style="margin-bottom: 2rem;">
+    <div class="stat-card">
+      <div>
+        <div class="stat-value"><?= $avgRating > 0 ? $avgRating . ' / 5.0' : 'N/A' ?></div>
+        <div class="stat-label">CSAT Satisfaction (<?= $totalRated ?> ratings)</div>
+      </div>
+      <div class="stat-icon-wrapper stat-icon-amber"><?= icon('star', '', 26) ?></div>
+    </div>
+
+    <div class="stat-card">
+      <div>
+        <div class="stat-value"><?= $slaCompliancePct ?>%</div>
+        <div class="stat-label">SLA Compliance Rate (<?= $metSla ?> met)</div>
+      </div>
+      <div class="stat-icon-wrapper stat-icon-green"><?= icon('check_circle', '', 26) ?></div>
+    </div>
+
+    <div class="stat-card">
+      <div>
+        <div class="stat-value"><?= $breachedSla ?></div>
+        <div class="stat-label">SLA Breached Tickets</div>
+      </div>
+      <div class="stat-icon-wrapper stat-icon-purple"><?= icon('clock', '', 26) ?></div>
+    </div>
+
+    <div class="stat-card">
+      <div>
+        <div class="stat-value"><?= $totalTickets ?></div>
+        <div class="stat-label">Total System Requests</div>
+      </div>
+      <div class="stat-icon-wrapper stat-icon-blue"><?= icon('ticket', '', 26) ?></div>
     </div>
   </div>
 

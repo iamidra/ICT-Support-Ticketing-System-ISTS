@@ -1,10 +1,19 @@
 <?php
 // Supervisor Session Logout handler
-require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/db_connect.php';
 
 if (session_status() === PHP_SESSION_NONE && php_sapi_name() !== 'cli') {
     session_start();
+    session_regenerate_id(true);
 }
+
+// Log audit event before clearing session
+if (isset($_SESSION['officer_id'])) {
+    log_audit_event('auth.logout', 'auth', 'Supervisor signed out of portal.', 'officer', (string)$_SESSION['officer_id'], (int)$_SESSION['officer_id'], $_SESSION['officer_name'] ?? 'Supervisor', 'supervisor');
+}
+
+unset($_SESSION['csrf_token']);
+generate_csrf_token();
 
 $_SESSION = [];
 
@@ -26,7 +35,11 @@ session_destroy();
 // Restart session for flash message
 if (session_status() === PHP_SESSION_NONE && php_sapi_name() !== 'cli') {
     session_start();
+    session_regenerate_id(true);
 }
+
+unset($_SESSION['csrf_token']);
+generate_csrf_token();
 
 // Prevent browser from serving cached authenticated pages after logout
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');

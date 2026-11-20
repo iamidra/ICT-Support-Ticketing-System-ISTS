@@ -72,7 +72,19 @@ if (!headers_sent()) {
     // Content Security Policy — allows inline scripts/styles needed by the application
     // 'unsafe-inline' is required because PHP templates embed inline <script> blocks and onclick handlers
     header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
+
+    $isHttps = (
+        (isset($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) === 'on') ||
+        (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https') ||
+        (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443)
+    );
+    if ($isHttps) {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
 }
+
+// Session Configuration Settings (Default: 15 minutes idle timeout)
+define('SESSION_LIFETIME', (int)env('SESSION_LIFETIME', 150));
 
 // Secure Session Initialization
 if (session_status() === PHP_SESSION_NONE && php_sapi_name() !== 'cli') {
@@ -80,7 +92,7 @@ if (session_status() === PHP_SESSION_NONE && php_sapi_name() !== 'cli') {
     ini_set('session.use_only_cookies', '1');
     ini_set('session.use_strict_mode', '1');
     ini_set('session.cookie_samesite', 'Lax');
-    ini_set('session.gc_maxlifetime', '3600');     // 1-hour server-side GC
+    ini_set('session.gc_maxlifetime', (string)SESSION_LIFETIME);     // Shortened server-side GC timeout
     ini_set('session.cookie_lifetime', '0');        // Cookie expires when browser closes
     ini_set('session.cache_limiter', 'nocache');    // Prevent caching of authenticated pages
 
@@ -107,7 +119,7 @@ define('DB_CHARSET', env('DB_CHARSET', 'utf8mb4'));
 // Application Details
 define('APP_NAME', env('APP_NAME', 'ICT Support Ticketing Solution'));
 define('APP_SHORT_NAME', env('APP_SHORT_NAME', 'ISTS'));
-define('APP_VERSION', env('APP_VERSION', '2.1.0'));
+define('APP_VERSION', env('APP_VERSION', '2.2.0'));
 define('MAX_LOGIN_ATTEMPTS', (int)env('MAX_LOGIN_ATTEMPTS', 5));
 define('LOGIN_LOCKOUT_MINUTES', (int)env('LOGIN_LOCKOUT_MINUTES', 15));
 

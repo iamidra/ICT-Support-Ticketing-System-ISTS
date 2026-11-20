@@ -79,6 +79,8 @@ try {
     );
     $update->execute([$fullName, $email, $role, $department, $status, $officerId]);
 
+    log_audit_event('officer.updated', 'officer', 'Updated profile for ' . $fullName . ' (' . $email . ', role: ' . $role . ', status: ' . $status . ')', 'officer', $officerId);
+
     // If updating own profile, update session name
     if ($isSelf) {
         $_SESSION['officer_name'] = $fullName;

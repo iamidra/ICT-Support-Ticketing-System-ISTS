@@ -67,29 +67,57 @@ if (!in_array($priority, $allowedPriorities, true)) {
     $priority = 'medium';
 }
 
+$dueDate = calculate_due_date($priority);
+
 try {
     $pdo->beginTransaction();
 
-    // db_connect.php auto-migrate already added email column; use it directly
+    $ticketCode = generate_ticket_code($pdo);
+
     $stmt = $pdo->prepare(
-        "INSERT INTO tickets (full_name, email, office, phone, category, subject, description, priority, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', NOW())"
+        "INSERT INTO tickets (ticket_code, full_name, email, office, phone, category, subject, description, priority, due_date, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', NOW())"
     );
-    $stmt->execute([$fullName, $email ?: null, $office, $phone, $category, $subject, $description, $priority]);
+    $stmt->execute([$ticketCode, $fullName, $email ?: null, $office, $phone, $category, $subject, $description, $priority, $dueDate]);
 
     $newId = (int)$pdo->lastInsertId();
-    $ticketCode = 'ISTS-' . str_pad($newId, 6, '0', STR_PAD_LEFT);
 
-    $update = $pdo->prepare("UPDATE tickets SET ticket_code = ? WHERE ticket_id = ?");
-    $update->execute([$ticketCode, $newId]);
+    // Handle optional attachment upload
+    if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] !== UPLOAD_ERR_NO_FILE) {
+        $uploadRes = save_ticket_attachment($_FILES['attachment'], $newId, 'public');
+        if (!$uploadRes['success']) {
+            $pdo->rollBack();
+            $_SESSION['form_data'] = $preserveData;
+            set_flash('danger', 'Attachment error: ' . $uploadRes['error']);
+            header('Location: ' . url('ticket_form.php'));
+            exit;
+        }
+    }
+
+    // Log creation in ticket history audit log
+    log_ticket_activity($newId, $fullName, 'public', 'created', 'Ticket created with priority: ' . ucfirst($priority) . ' (SLA due ' . format_date($dueDate) . ')');
 
     $pdo->commit();
 
     // Clear saved form data upon success
     unset($_SESSION['form_data']);
 
+    // Send confirmation email
+    require_once __DIR__ . '/includes/mailer.php';
+    notify_ticket_created([
+        'ticket_id'   => $newId,
+        'ticket_code' => $ticketCode,
+        'full_name'   => $fullName,
+        'email'       => $email,
+        'subject'     => $subject,
+        'category'    => $category,
+        'priority'    => $priority
+    ]);
+
     set_flash('success', 'Your support ticket has been created! Please keep your Ticket ID safe for tracking.');
-    header('Location: ' . url('ticket_confirmation.php?ticket_id=' . urlencode($ticketCode)));
+    $contactParam = !empty($email) ? $email : $phone;
+    header('Location: ' . url('ticket_confirmation.php?ticket_id=' . urlencode($ticketCode) . '&c=' . urlencode($contactParam)));
+    exit;
     exit;
 
 } catch (Exception $e) {
